@@ -8,7 +8,7 @@ class AlfaCoinsProvider:
         if not getattr(settings, 'ALFACOINS_SECRET_KEY', None) or \
                 not getattr(settings, 'ALFACOINS_BUSINESS_NAME', None) or \
                 not getattr(settings, 'ALFACOINS_PASSWORD', None):
-            raise ImproperlyConfigured('ALFACOINS_BUSINESS_NAME, ALFACOINS_BUSINESS_NAME '
+            raise ImproperlyConfigured('ALFACOINS_SECRET_KEY, ALFACOINS_BUSINESS_NAME '
                                        'and ALFACOINS_PASSWORD are required!')
 
         self._secret_key = getattr(settings, 'ALFACOINS_SECRET_KEY')

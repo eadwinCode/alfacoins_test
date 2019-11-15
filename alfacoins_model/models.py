@@ -6,7 +6,7 @@ from django.utils.translation import ugettext_lazy as _
 from model_utils.models import TimeStampedModel
 from .utils.codetype import get_coins_list, get_standard_currency, USD, BTC
 import uuid
-from .alfacoin import CoinsProvider
+from django.utils.functional import cached_property
 
 
 class CoinPaymentsTransaction(TimeStampedModel):
@@ -44,7 +44,7 @@ class Payment(TimeStampedModel):
     )
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    type = models.CharField(max_length=8, choices=get_coins_list(), default=BTC, verbose_name=_('Currency Type'))
+    currency_type = models.CharField(max_length=8, choices=get_coins_list(), default=BTC, verbose_name=_('Currency Type'))
     currency = models.CharField(max_length=8, choices=get_standard_currency(), default=USD,
                                 verbose_name=_('Payment currency'))
     amount = models.DecimalField(max_digits=65, decimal_places=18, verbose_name=_('Amount'))
@@ -75,6 +75,8 @@ class Payment(TimeStampedModel):
         if self.provider_tx:
             return self.provider_tx.timeout < timezone.now()
 
+   
+
     def create_tx(self, **kwargs):
         """
         :param kwargs:
@@ -85,7 +87,7 @@ class Payment(TimeStampedModel):
             redirectURL          Optionally Merchant's page which is shown after payment is made by a customer
         :return: `CoinPaymentsTransaction` instance
         """
-        alfacoins = CoinsProvider.get_instance()
+        alfacoins = self.CoinsProviderInstance
         options = dict(payerName=self.payerName, payerEmail=self.payerEmail)
         options.update(**kwargs)
         params = dict(amount=self.amount_left(), type=self.type, order_id=self.id, description=self.description,
