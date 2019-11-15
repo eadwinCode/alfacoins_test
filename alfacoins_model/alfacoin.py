@@ -22,4 +22,5 @@ class AlfaCoinsProvider:
         return alfacoins_instance
 
 
-CoinsProvider = AlfaCoinsProvider().get_instance()
+CoinsProvider = AlfaCoinsProvider()
+CoinsProviderInstance = CoinsProvider.get_instance()

@@ -1,10 +1,12 @@
 from django.db import models
 import datetime
+from django.utils import timezone
 from decimal import Decimal
 from django.utils.translation import ugettext_lazy as _
 from model_utils.models import TimeStampedModel
 from .utils.codetype import get_coins_list, get_standard_currency, USD, BTC
 import uuid
+from .alfacoin import CoinsProvider
 
 
 class CoinPaymentsTransaction(TimeStampedModel):
@@ -55,4 +57,54 @@ class Payment(TimeStampedModel):
     payerEmail = models.EmailField(null=True, blank=True, verbose_name=_("Customer's email"))
     description = models.TextField(null=True, blank=True, verbose_name=_("Description"))
 
+    def __str__(self):
+        return "{} of {} - {}".format(str(self.amount_paid.normalize()), str(self.amount.normalize()),
+                                      self.get_status_display())
+
+    class Meta:
+        verbose_name = _('Payment')
+        verbose_name_plural = _('Payments')
+
+    def is_paid(self):
+        return self.status == self.PAYMENT_STATUS_PAID
+
+    def amount_left(self):
+        return self.amount - self.amount_paid
+
+    def is_expired(self):
+        if self.provider_tx:
+            return self.provider_tx.timeout < timezone.now()
+
+    def create_tx(self, **kwargs):
+        """
+        :param kwargs:
+            payerEmail   Optionally (but highly recommended) Customer's email for notification.
+            payerName    Optionally Customer's name for notification.
+
+            notificationURL      Optionally custom Merchant's URL for payment notification.
+            redirectURL          Optionally Merchant's page which is shown after payment is made by a customer
+        :return: `CoinPaymentsTransaction` instance
+        """
+        alfacoins = CoinsProvider.get_instance()
+        options = dict(payerName=self.payerName, payerEmail=self.payerEmail)
+        options.update(**kwargs)
+        params = dict(amount=self.amount_left(), type=self.type, order_id=self.id, description=self.description,
+                      currency=self.currency, options=options)
+
+        result = alfacoins.create_order(**params)
+        if result['error'] == 'ok':
+            result = result['result']
+            timeout = timezone.now() + datetime.timedelta(seconds=result['timeout'])
+            c = CoinPaymentsTransaction.objects.create(id=result['id'],
+                                                       amount=Decimal(result['coin_amount']),
+                                                       address=result['deposit'],
+                                                       iframe_url=result['iframe'],
+                                                       status_url=result['url'],
+                                                       timeout=timeout)
+            self.provider_tx = c
+            self.save()
+        else:
+            return None
+
+        return c
 
