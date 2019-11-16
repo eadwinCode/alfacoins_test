@@ -120,8 +120,9 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/2.2/howto/static-files/
 
 STATIC_URL = '/static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
-ALFACOINS_SECRET_KEY = ""
-ALFACOINS_BUSINESS_NAME = ""
-ALFACOINS_PASSWORD = ""
+ALFACOINS_SECRET_KEY = "fe66b68d348accdb4f54100733a37bf9"
+ALFACOINS_BUSINESS_NAME = "Testing"
+ALFACOINS_PASSWORD = "8000-f68dee5e-6fc1-4b49-b530-cd0b80e0d4ae.ws-eu01"
 ALFACOINS_NOTIFICATION_URL = ""

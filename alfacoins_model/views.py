@@ -56,4 +56,5 @@ class PaymentSetupView(FormView):
     def form_valid(self, form):
         cl = form.cleaned_data
         payment = form.save(commit=False)
+        payment.amount_paid = float(0)
         return create_tx(self.request, payment)

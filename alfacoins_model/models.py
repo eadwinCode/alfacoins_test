@@ -6,17 +6,19 @@ from django.utils.translation import ugettext_lazy as _
 from model_utils.models import TimeStampedModel
 from .utils.codetype import get_coins_list, get_standard_currency, USD, BTC
 import uuid
-from django.utils.functional import cached_property
+from alfacoins_model.alfacoin import AlfaCoinsProvider
+from .utils import generate_qr_code_url
 
 
 class CoinPaymentsTransaction(TimeStampedModel):
     id = models.CharField(max_length=100, verbose_name=_('id'), primary_key=True, editable=True)
     address = models.CharField(max_length=150, verbose_name=_('Address'))
-    amount = models.DecimalField(max_digits=65, decimal_places=18, verbose_name=_('Amount'))
-    confirms_needed = models.PositiveSmallIntegerField(verbose_name=_('Confirms needed'))
+    legacy_address = models.CharField(max_length=150, verbose_name=_('Legacy Address'))
+    destination_tag = models.CharField(max_length=150, verbose_name=_('Destination Tag'))
+    amount = models.FloatField(verbose_name=_('Amount'))
     iframe_url = models.URLField(verbose_name=_('iframe Url'))
     status_url = models.URLField(verbose_name=_('Status Url'))
-    timeout = models.DateTimeField(verbose_name=_('Valid until'))
+    qr_code = models.URLField(verbose_name=_('QR Code'))
 
     def __str__(self):
         return self.id
@@ -44,11 +46,12 @@ class Payment(TimeStampedModel):
     )
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    currency_type = models.CharField(max_length=8, choices=get_coins_list(), default=BTC, verbose_name=_('Currency Type'))
+    currency_type = models.CharField(max_length=8, choices=get_coins_list(), default=BTC,
+                                     verbose_name=_('Currency Type'))
     currency = models.CharField(max_length=8, choices=get_standard_currency(), default=USD,
                                 verbose_name=_('Payment currency'))
-    amount = models.DecimalField(max_digits=65, decimal_places=18, verbose_name=_('Amount'))
-    amount_paid = models.DecimalField(max_digits=65, decimal_places=18, verbose_name=_('Amount paid'))
+    amount = models.FloatField(verbose_name=_('Amount'))
+    amount_paid = models.FloatField(verbose_name=_('Amount paid'))
     provider_tx = models.OneToOneField(CoinPaymentsTransaction, on_delete=models.CASCADE,
                                        verbose_name=_('Payment transaction'), null=True, blank=True)
     status = models.CharField(max_length=4, choices=PAYMENT_STATUS_CHOICES)
@@ -58,7 +61,7 @@ class Payment(TimeStampedModel):
     description = models.TextField(null=True, blank=True, verbose_name=_("Description"))
 
     def __str__(self):
-        return "{} of {} - {}".format(str(self.amount_paid.normalize()), str(self.amount.normalize()),
+        return "{} of {} - {}".format(str(self.amount_paid), str(self.amount),
                                       self.get_status_display())
 
     class Meta:
@@ -69,17 +72,16 @@ class Payment(TimeStampedModel):
         return self.status == self.PAYMENT_STATUS_PAID
 
     def amount_left(self):
-        return self.amount - self.amount_paid
+        value_ = self.amount - self.amount_paid
+        return value_
 
     def is_expired(self):
         if self.provider_tx:
             return self.provider_tx.timeout < timezone.now()
 
-   
-
-    def create_tx(self, **kwargs):
+    def create_tx(self, **options):
         """
-        :param kwargs:
+        :param options:
             payerEmail   Optionally (but highly recommended) Customer's email for notification.
             payerName    Optionally Customer's name for notification.
 
@@ -87,26 +89,24 @@ class Payment(TimeStampedModel):
             redirectURL          Optionally Merchant's page which is shown after payment is made by a customer
         :return: `CoinPaymentsTransaction` instance
         """
-        alfacoins = self.CoinsProviderInstance
+        alfacoins = AlfaCoinsProvider.coinsprovider()
         options = dict(payerName=self.payerName, payerEmail=self.payerEmail)
-        options.update(**kwargs)
-        params = dict(amount=self.amount_left(), type=self.type, order_id=self.id, description=self.description,
-                      currency=self.currency, options=options)
+        options.update(**options)
+        params = dict(amount=self.amount_left(), type=self.currency_type, order_id=str(self.id),
+                      description=self.description, currency=self.currency, options=options)
 
         result = alfacoins.create_order(**params)
-        if result['error'] == 'ok':
-            result = result['result']
-            timeout = timezone.now() + datetime.timedelta(seconds=result['timeout'])
-            c = CoinPaymentsTransaction.objects.create(id=result['id'],
-                                                       amount=Decimal(result['coin_amount']),
-                                                       address=result['deposit'],
-                                                       iframe_url=result['iframe'],
-                                                       status_url=result['url'],
-                                                       timeout=timeout)
-            self.provider_tx = c
-            self.save()
-        else:
-            return None
-
+        deposit = result['deposit']
+        data = dict(
+            id=result['id'],
+            amount=Decimal(result['coin_amount']),
+            iframe_url=result['iframe'],
+            status_url=result['url'],
+            qr_code=generate_qr_code_url(f"{self.currency_type.lower()}:"
+                                         f"{deposit.get('address')}?amount={result.get('coin_amount')}")
+        )
+        data.update(**deposit)
+        c = CoinPaymentsTransaction.objects.create(**data)
+        self.provider_tx = c
+        self.save()
         return c
-
