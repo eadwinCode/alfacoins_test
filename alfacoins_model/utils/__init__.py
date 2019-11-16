@@ -1,14 +1,12 @@
 from hashlib import md5
+from alfacoins_model.alfacoin import AlfaCoinsProvider
 # self._encoded_password = md5(raw_password.encode('utf-8')) \
 #             .hexdigest() \
 #             .upper()
 
 
-def CoinsProviderInstance():
-    from .alfacoin import CoinsProviderInstance
-    return CoinsProviderInstance
-
 def create_hash_data(**kwargs):
+    CoinsProviderInstance = AlfaCoinsProvider.coinsprovider()
     password = CoinsProviderInstance.password
     name = CoinsProviderInstance.name
     params = dict(name=name, password=password)

@@ -1,5 +1,6 @@
 from alfacoins_api_python import ALFACoins
 from django.conf import settings, ImproperlyConfigured
+from django.utils.functional import cached_property
 
 
 class AlfaCoinsProvider:
@@ -17,10 +18,12 @@ class AlfaCoinsProvider:
         self._notification_url = getattr(settings, 'ALFACOINS_NOTIFICATION_URL', None)
         self._redirect_url = getattr(settings, 'ALFACOINS_REDIRECT_URL', None)
 
+    @cached_property
     def get_instance(self):
         alfacoins_instance = ALFACoins(name=self._name, secret_key=self._secret_key, password=self._password)
         return alfacoins_instance
-
-
-CoinsProvider = AlfaCoinsProvider()
-CoinsProviderInstance = CoinsProvider.get_instance()
+    
+    @classmethod
+    def coinsprovider(cls):
+        instance = cls()
+        return instance.get_instance

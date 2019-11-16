@@ -7,12 +7,13 @@ from model_utils.models import TimeStampedModel
 from .utils.codetype import get_coins_list, get_standard_currency, USD, BTC
 import uuid
 from django.utils.functional import cached_property
+from alfacoins_model.alfacoin import AlfaCoinsProvider
 
 
 class CoinPaymentsTransaction(TimeStampedModel):
     id = models.CharField(max_length=100, verbose_name=_('id'), primary_key=True, editable=True)
     address = models.CharField(max_length=150, verbose_name=_('Address'))
-    amount = models.DecimalField(max_digits=65, decimal_places=18, verbose_name=_('Amount'))
+    amount = models.FloatField(max_digits=65, decimal_places=18, verbose_name=_('Amount'))
     confirms_needed = models.PositiveSmallIntegerField(verbose_name=_('Confirms needed'))
     iframe_url = models.URLField(verbose_name=_('iframe Url'))
     status_url = models.URLField(verbose_name=_('Status Url'))
@@ -47,8 +48,8 @@ class Payment(TimeStampedModel):
     currency_type = models.CharField(max_length=8, choices=get_coins_list(), default=BTC, verbose_name=_('Currency Type'))
     currency = models.CharField(max_length=8, choices=get_standard_currency(), default=USD,
                                 verbose_name=_('Payment currency'))
-    amount = models.DecimalField(max_digits=65, decimal_places=18, verbose_name=_('Amount'))
-    amount_paid = models.DecimalField(max_digits=65, decimal_places=18, verbose_name=_('Amount paid'))
+    amount = models.FloatField(max_digits=65, decimal_places=18, verbose_name=_('Amount'))
+    amount_paid = models.FloatField(max_digits=65, decimal_places=18, verbose_name=_('Amount paid'))
     provider_tx = models.OneToOneField(CoinPaymentsTransaction, on_delete=models.CASCADE,
                                        verbose_name=_('Payment transaction'), null=True, blank=True)
     status = models.CharField(max_length=4, choices=PAYMENT_STATUS_CHOICES)
@@ -69,7 +70,8 @@ class Payment(TimeStampedModel):
         return self.status == self.PAYMENT_STATUS_PAID
 
     def amount_left(self):
-        return self.amount - self.amount_paid
+        value_ = self.amount - self.amount_paid
+        return value_
 
     def is_expired(self):
         if self.provider_tx:
@@ -87,11 +89,11 @@ class Payment(TimeStampedModel):
             redirectURL          Optionally Merchant's page which is shown after payment is made by a customer
         :return: `CoinPaymentsTransaction` instance
         """
-        alfacoins = self.CoinsProviderInstance
+        alfacoins = AlfaCoinsProvider.coinsprovider()
         options = dict(payerName=self.payerName, payerEmail=self.payerEmail)
         options.update(**kwargs)
-        params = dict(amount=self.amount_left(), type=self.type, order_id=self.id, description=self.description,
-                      currency=self.currency, options=options)
+        params = dict(amount=self.amount_left().normalize(), type=self.currency_type, order_id=self.id, 
+        description=self.description, currency=self.currency, options=options)
 
         result = alfacoins.create_order(**params)
         if result['error'] == 'ok':
