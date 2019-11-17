@@ -90,7 +90,8 @@ class Payment(TimeStampedModel):
         :return: `CoinPaymentsTransaction` instance
         """
         alfacoins = AlfaCoinsProvider.coinsprovider()
-        options = dict(payerName=self.payerName, payerEmail=self.payerEmail)
+        options = dict(payerName=self.payerName, payerEmail=self.payerEmail, 
+        notificationURL='https://8000-f68dee5e-6fc1-4b49-b530-cd0b80e0d4ae.ws-eu01.gitpod.io/notification/payments')
         options.update(**options)
         params = dict(amount=self.amount_left(), type=self.currency_type, order_id=str(self.id),
                       description=self.description, currency=self.currency, options=options)

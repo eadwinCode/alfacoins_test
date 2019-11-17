@@ -2,7 +2,7 @@ from django.shortcuts import render, render_to_response
 from django.http import HttpResponse
 from django import forms
 from django.views.decorators.csrf import csrf_exempt
-from django.views.generic import ListView, FormView
+from django.views.generic import ListView, FormView, DetailView
 
 from .utils import create_hash_data
 from django.http.response import HttpResponseBadRequest
@@ -51,12 +51,18 @@ def create_tx(request, payment):
         context['object'] = payment
     except Exception as e:
         context['error'] = e
-    return HttpResponse("OK", content_type="text/plain")
+    return render(request, 'alfacoins_model/payment_detail.html', context)
 
 
 class PaymentList(ListView):
     model = Payment
     template_name = 'alfacoins_model/payment_list.html'
+
+
+class PaymentDetail(DetailView):
+    model = Payment
+    template_name = 'alfacoins_model/payment_detail.html'
+    context_object_name = 'object'
 
 
 class PaymentSetupView(FormView):
