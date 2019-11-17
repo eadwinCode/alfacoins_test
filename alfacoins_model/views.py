@@ -13,6 +13,16 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Create your views here.
+
+# 'coin_received_amount': '0.00000000', 'currency': 'USD',
+# 'fiat_paid_amount': '0.000000', 'hash': '920FF89E3520672E391C201BE8207B10,
+# 'id': '575965',
+# 'modified': '2019-11-17 08:51:01',
+# 'order_id': 'a8ce978e-0a9f-414a-9a51-4efd9c2ed49a',
+# 'received_amount': '101.00000000',
+# 'status': 'expired',
+# 'type': 'bitcoin'
+
 @csrf_exempt
 def payment_notification(request):
     post_data = request.POST.dict()
