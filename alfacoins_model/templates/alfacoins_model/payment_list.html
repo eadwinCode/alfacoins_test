@@ -1,8 +1,6 @@
 {% extends 'alfacoins_model/base.html' %}
 {% block content %}
   <ul>
-
-
     {% for obj in object_list %}
       <li>
         Payment #{{ obj.id }}, {{ obj.amount_paid.normalize }} {{ obj.get_currency_paid_display }}

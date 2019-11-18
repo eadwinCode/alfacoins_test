@@ -1,0 +1,23 @@
+{% extends 'alfacoins_model/base.html' %}
+{% block content %}
+  {% if error %}
+    <div class="alert alert-danger" role="alert">
+      An error occured: {{ error }}
+    </div>
+  {% else %}
+    <h4>AlfaCoin.net Transaction <strong>#{{ object.provider_tx.id }}</strong></h4>
+    <p>
+      Sent {{ object.provider_tx.coin_amount }}
+      {{ object.get_currency_display }}
+      to {{ object.provider_tx.address }}
+    </p>
+      <a class="btn btn-primary" href="{% url 'bit_send_status' tx_id=object.provider_tx.pk %}" target="_blank">
+        <span class="btn__text">
+          Withdrawal status
+        </span>
+    </a>
+  {% endif %}
+{% endblock content %}
+{% block javascript %}
+
+{% endblock javascript %}

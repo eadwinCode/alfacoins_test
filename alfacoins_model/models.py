@@ -8,6 +8,7 @@ from .utils.codetype import get_coins_list, get_standard_currency, USD, BTC
 import uuid
 from alfacoins_model.alfacoin import AlfaCoinsProvider
 from .utils import generate_qr_code_url
+from django.conf import settings
 
 
 class CoinPaymentsTransaction(TimeStampedModel):
@@ -15,8 +16,8 @@ class CoinPaymentsTransaction(TimeStampedModel):
     address = models.CharField(max_length=150, verbose_name=_('Address'))
     legacy_address = models.CharField(max_length=150, verbose_name=_('Legacy Address'))
     destination_tag = models.CharField(max_length=150, verbose_name=_('Destination Tag'))
-    amount = models.FloatField(verbose_name=_('Amount'))
-    iframe_url = models.URLField(verbose_name=_('iframe Url'))
+    coin_amount = models.FloatField(verbose_name=_('Coin Amount'), default=0)
+    coin_received_amount = models.FloatField(verbose_name=_('Coin Received Amount'), default=0)
     status_url = models.URLField(verbose_name=_('Status Url'))
     qr_code = models.URLField(verbose_name=_('QR Code'))
 
@@ -59,6 +60,7 @@ class Payment(TimeStampedModel):
     payerName = models.CharField(max_length=250, null=True, blank=True, verbose_name=_("Customer's name"))
     payerEmail = models.EmailField(null=True, blank=True, verbose_name=_("Customer's email"))
     description = models.TextField(null=True, blank=True, verbose_name=_("Description"))
+    timeout = models.DateTimeField(verbose_name=_('Valid until'), editable=False)
 
     def __str__(self):
         return "{} of {} - {}".format(str(self.amount_paid), str(self.amount),
@@ -77,11 +79,11 @@ class Payment(TimeStampedModel):
 
     def is_expired(self):
         if self.provider_tx:
-            return self.provider_tx.timeout < timezone.now()
+            return self.timeout < timezone.now()
 
-    def create_tx(self, **options):
+    def create_tx(self, **kwargs):
         """
-        :param options:
+        :param kwargs:
             payerEmail   Optionally (but highly recommended) Customer's email for notification.
             payerName    Optionally Customer's name for notification.
 
@@ -90,24 +92,135 @@ class Payment(TimeStampedModel):
         :return: `CoinPaymentsTransaction` instance
         """
         alfacoins = AlfaCoinsProvider.coinsprovider()
-        options = dict(payerName=self.payerName, payerEmail=self.payerEmail, 
-        notificationURL='https://8000-f68dee5e-6fc1-4b49-b530-cd0b80e0d4ae.ws-eu01.gitpod.io/notification/payments')
-        options.update(**options)
+        options = dict(payerName=self.payerName, payerEmail=self.payerEmail)
+        options.update(**kwargs)
         params = dict(amount=self.amount_left(), type=self.currency_type, order_id=str(self.id),
                       description=self.description, currency=self.currency, options=options)
 
         result = alfacoins.create_order(**params)
+        self.timeout = timezone.now() + datetime.timedelta(seconds=int(getattr(settings, 'ALFACOINS_TIMEOUT', '900')))
         deposit = result['deposit']
         data = dict(
             id=result['id'],
-            amount=Decimal(result['coin_amount']),
-            iframe_url=result['iframe'],
+            coin_amount=Decimal(result['coin_amount']),
             status_url=result['url'],
+            coin_received_amount=float(0),
             qr_code=generate_qr_code_url(f"{self.currency_type.lower()}:"
                                          f"{deposit.get('address')}?amount={result.get('coin_amount')}")
         )
         data.update(**deposit)
         c = CoinPaymentsTransaction.objects.create(**data)
+
         self.provider_tx = c
         self.save()
         return c
+
+    @classmethod
+    def status_dict(cls):
+        return {'expired': Payment.PAYMENT_STATUS_EXPIRED, 'paid': Payment.PAYMENT_STATUS_PAID,
+                'partially paid': Payment.PAYMENT_STATUS_PARTIAL_PAID, 'new': Payment.PAYMENT_STATUS_NEW,
+                'completed': Payment.PAYMENT_STATUS_COMPLETED, 'refund': Payment.PAYMENT_STATUS_REFUND
+                }
+
+    def get_order_status(self):
+        if self.provider_tx and not (self.status in [Payment.PAYMENT_STATUS_EXPIRED, Payment.PAYMENT_STATUS_COMPLETED]):
+            alfacoins = AlfaCoinsProvider.coinsprovider()
+            res = alfacoins.order_status(txn_id=int(self.provider_tx.id))
+            if self.status != Payment.PAYMENT_STATUS_COMPLETED:
+                self.status = self.status_dict().get(res['status'])
+                self.amount_paid = float(res['amount'])
+                self.provider_tx.coin_received_amount = float(res['coin_received_amount'])
+                self.save()
+            return dict(status=res['status'], date=res['date'], timeout=str(self.timeout),
+                        is_expired=self.is_expired(), coin_amount=float(res['coin_amount']),
+                        type=res['type'], coin_received_amount=float(res['coin_received_amount']),
+                        rate=float(res['rate']),
+                        amount=self.amount, currency=self.currency)
+        return dict(status=self.get_status_display(), timeout=str(self.timeout), is_expired=self.is_expired(),
+                    amount=self.amount, currency=self.currency)
+
+
+class WithdrawalTransaction(TimeStampedModel):
+    id = models.CharField(max_length=100, verbose_name=_('id'), primary_key=True, editable=True)
+    coin_amount = models.FloatField(verbose_name=_('Coin Amount'))
+    tx_id = models.CharField(max_length=100, verbose_name=_('tx_id'), editable=True, null=True, blank=True)
+
+
+class Withdrawal(TimeStampedModel):
+    WITHDRAW_STATUS_COMPLETED = 'COMPL'
+    WITHDRAW_STATUS_PENDING = 'PEND'
+
+    WITHDRAW_STATUS_CHOICES = (
+        (WITHDRAW_STATUS_COMPLETED, _('Completed')),
+        (WITHDRAW_STATUS_PENDING, _('Paid'))
+    )
+    address = models.CharField(max_length=150, verbose_name=_('Coin Address'))
+    legacy_address = models.CharField(null=True, blank=True, max_length=150, verbose_name=_('Legacy Address'))
+    destination_tag = models.CharField(null=True, blank=True, max_length=150, verbose_name=_('Destination Tag'))
+
+    amount = models.FloatField(verbose_name=_('Amount'))
+    coin_amount = models.FloatField(null=True, blank=True, verbose_name=_('Coin Amount'))
+    currency_type = models.CharField(max_length=8, choices=get_coins_list(), default=BTC,
+                                     verbose_name=_('Currency Type'))
+    recipient_name = models.CharField(max_length=250, null=True, blank=True, verbose_name=_("Customer's name"))
+    recipient_email = models.EmailField(null=True, blank=True, verbose_name=_("Customer's email"))
+    reference = models.TextField(null=True, blank=True, verbose_name=_("Description"))
+    status = models.CharField(max_length=4, choices=WITHDRAW_STATUS_CHOICES)
+    provider_tx = models.OneToOneField(WithdrawalTransaction, on_delete=models.CASCADE,
+                                       verbose_name=_('Withdrawal transaction'), null=True, blank=True)
+
+    approved = models.BooleanField(default=False, verbose_name=_('Approved'), editable=False)
+
+    def __str__(self):
+        return f"Paid {self.amount or self.coin_amount} to {self.address} {self.currency_type}"
+
+    @classmethod
+    def status_dict(cls):
+        return {'pending': Withdrawal.WITHDRAW_STATUS_PENDING, 'completed': Withdrawal.WITHDRAW_STATUS_COMPLETED}
+
+    def create_wx(self, **kwargs):
+        """
+        :param kwargs:
+            address           for Bitcoin, Litecoin, Ethereum, Dash
+            destination_tag   for Bitcoin Cash
+            legacy_address    for XRP
+        :return: `WithdrawalTransaction` instance
+        """
+        alfacoins = AlfaCoinsProvider.coinsprovider()
+        if self.coin_amount and self.amount:
+            raise Exception('coin_amount and amount can not be used at the same time')
+        amount = self.coin_amount or self.amount
+        options = dict(address=self.address)
+        if self.destination_tag:
+            options.update(destination_tag=self.destination_tag)
+        if self.legacy_address:
+            options.update(legacy_address=self.legacy_address)
+        options.update(**kwargs)
+        params = dict(amount=str(self.amount), type=self.currency_type, coin_amount=self.coin_amount,
+                      reference=self.reference, recipient_name=self.recipient_name, options=options,
+                      recipient_email=self.recipient_email)
+
+        result = alfacoins.bitsend(**params)
+        data = dict(
+            id=result,
+            amount=amount,
+        )
+        c = WithdrawalTransaction.objects.create(**data)
+
+        self.provider_tx = c
+        self.save()
+        return c
+
+    def get_wx_status(self):
+        res = None
+        if self.provider_tx and not (self.status in ['completed']):
+            alfacoins = AlfaCoinsProvider.coinsprovider()
+            res = alfacoins.bitsend_status(bitsend_id=int(self.provider_tx.id))
+            if self.status != Payment.PAYMENT_STATUS_COMPLETED:
+                self.status = self.status_dict().get(res['status'])
+                self.provider_tx.tx_id = int(res.get('txid', None))
+                self.provider_tx.coin_amount = float(res.get('coin_amount'))
+                self.save()
+            return dict(status=res['status'], type=res['type'], coin_amount=float(res['coin_amount']))
+        return dict(status=self.get_status_display(), type=self.currency_type,
+                    coin_amount=self.provider_tx.coin_amount)

@@ -1,0 +1,5 @@
+restfulpy~=2.0
+coverage
+coveralls
+pytest-pudb
+pytest-cov

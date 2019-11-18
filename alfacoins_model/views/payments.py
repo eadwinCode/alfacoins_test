@@ -1,39 +1,14 @@
-from django.shortcuts import render, render_to_response
+import json
+from django.shortcuts import render, get_object_or_404
 from django.http import HttpResponse
 from django import forms
-from django.views.decorators.csrf import csrf_exempt
+from django.urls import reverse
 from django.views.generic import ListView, FormView, DetailView
-
-from .utils import create_hash_data
-from django.http.response import HttpResponseBadRequest
-from .models import Payment
-from decimal import Decimal
+from django.conf import settings
+from alfacoins_model.models import Payment
 import logging
 
 logger = logging.getLogger(__name__)
-
-# Create your views here.
-
-# 'coin_received_amount': '0.00000000', 'currency': 'USD',
-# 'fiat_paid_amount': '0.000000', 'hash': '920FF89E3520672E391C201BE8207B10,
-# 'id': '575965',
-# 'modified': '2019-11-17 08:51:01',
-# 'order_id': 'a8ce978e-0a9f-414a-9a51-4efd9c2ed49a',
-# 'received_amount': '101.00000000',
-# 'status': 'expired',
-# 'type': 'bitcoin'
-
-@csrf_exempt
-def payment_notification(request):
-    post_data = request.POST.dict()
-    server_hash = post_data.pop('hash')
-
-    our_hash = create_hash_data(**post_data)
-
-    if our_hash != server_hash:
-        return HttpResponseBadRequest('Invalid merchant id')
-
-    return HttpResponse("OK", content_type="text/plain")
 
 
 class ExamplePaymentForm(forms.ModelForm):
@@ -45,7 +20,11 @@ class ExamplePaymentForm(forms.ModelForm):
 def create_tx(request, payment):
     context = {}
     try:
-        tx = payment.create_tx()
+        notification_url = None
+        if not getattr(settings, 'DEBUG', True):
+            notification_url = request.\
+                build_absolute_uri(reverse(getattr(settings, 'ALFACOINS_NOTIFICATION_URL', 'ipn-payment')))
+        tx = payment.create_tx(notificationURL=notification_url)
         payment.status = Payment.PAYMENT_STATUS_NEW
         payment.save()
         context['object'] = payment
@@ -74,3 +53,8 @@ class PaymentSetupView(FormView):
         payment = form.save(commit=False)
         payment.amount_paid = float(0)
         return create_tx(self.request, payment)
+
+
+def get_order_status(request, tx_id):
+    payment = get_object_or_404(Payment, provider_tx_id__exact=tx_id)
+    return HttpResponse(json.dumps(payment.get_order_status(), indent=4), content_type='application/json')

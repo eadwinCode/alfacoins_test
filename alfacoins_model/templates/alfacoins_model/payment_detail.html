@@ -6,10 +6,10 @@
     </div>
   {% else %}
     Payment created successfully.
-    Payment amount: {{ object.amount.normalize }} {{ object.get_currency_original_display }}
+    Payment amount: {{ object.amount }} {{ object.get_currency_display }}
     <h4>CoinPayments.net Transaction <strong>{{ object.provider_tx.id }}</strong></h4>
     <p>
-      Send {{ object.provider_tx.amount.normalize }}
+      Send {{ object.provider_tx.coin_amount }}
       {{ object.get_currency_paid_display }}
       to {{ object.provider_tx.address }}
     </p>
@@ -24,12 +24,23 @@
           View status
         </span>
     </a>
+      <a class="btn btn-primary" href="{% url 'order_status' tx_id=object.provider_tx.pk %}" target="_blank">
+        <span class="btn__text">
+          Payment status
+        </span>
+    </a>
     <a class="btn btn-primary" href="{{ object.provider_tx.iframe_url }}" target="_blank">
       <span class="btn__text">
         Iframe Url
       </span>
     </a>
-    
+
+    <form action="{% url 'mark_as_paid' tx_id=object.provider_tx.pk %}" method="POST">
+      {% csrf_token %}.
+      <button class="btn__text" type="submit">
+        Mark as Paid
+      </button>
+    </form>
   {% endif %}
 {% endblock content %}
 {% block javascript %}

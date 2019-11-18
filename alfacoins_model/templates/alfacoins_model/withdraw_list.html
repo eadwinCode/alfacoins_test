@@ -1,0 +1,15 @@
+{% extends 'alfacoins_model/base.html' %}
+{% block content %}
+        <a class="btn btn-primary" href="{% url 'withdraw_setup' %}">Make Withdrawal</a>
+  <ul>
+    {% for obj in object_list %}
+      <li>
+        Withdrawal #{{ obj.id }}, {{ obj.amount }} {{ obj.get_currency_type_display }}
+        of {{ obj.amount }} {{ obj.get_currency_display }} paid. <br>
+        Status: {{ obj.get_status_display }}
+        <br>
+        <a class="btn btn-primary" href="{% url 'withdraw_detail' obj.pk %}">View transaction details</a>
+      </li>
+    {% endfor %}
+  </ul>
+{% endblock content %}
