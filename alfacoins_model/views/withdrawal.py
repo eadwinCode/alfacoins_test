@@ -39,7 +39,7 @@ class WithdrawList(ListView):
 
 class WithdrawDetail(DetailView):
     model = Withdrawal
-    template_name = 'alfacoins_model/payment_detail.html'
+    template_name = 'alfacoins_model/withdraw_detail.html'
     context_object_name = 'object'
 
 

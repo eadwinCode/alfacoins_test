@@ -25,15 +25,18 @@ logger = logging.getLogger(__name__)
 def payment_notification(request):
     status = Payment.status_dict()
     post_data = request.POST.dict()
-    server_hash = post_data.pop('hash')
+    server_hash = post_data.get('hash', None)
+    
+    if not server_hash:
+        HttpResponseBadRequest('Invalid data format')
 
     our_hash = create_hash_data(**post_data)
-
     if our_hash != server_hash:
         return HttpResponseBadRequest('Invalid merchant id')
 
     payment = get_object_or_404(Payment, provider_tx_id__exact=int(post_data['id']))
-    payment.amount_paid = post_data['coin_received_amount']
+    payment.amount_paid = post_data['received_amount']
+    payment.provider_tx.coin_received_amount = post_data['coin_received_amount']
     payment.status = status.get(post_data['status'])
     logger.info(f"Notification received for #{post_data['id']}")
     payment.save()

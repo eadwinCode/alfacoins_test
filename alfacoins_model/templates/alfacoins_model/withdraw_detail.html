@@ -9,7 +9,7 @@
     <p>
       Sent {{ object.provider_tx.coin_amount }}
       {{ object.get_currency_display }}
-      to {{ object.provider_tx.address }}
+      to {{ object.address }}
     </p>
       <a class="btn btn-primary" href="{% url 'bit_send_status' tx_id=object.provider_tx.pk %}" target="_blank">
         <span class="btn__text">
