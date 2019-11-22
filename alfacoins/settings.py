@@ -127,3 +127,39 @@ ALFACOINS_BUSINESS_NAME = "Testing"
 ALFACOINS_PASSWORD = "8000-f68dee5e-6fc1-4b49-b530-cd0b80e0d4ae.ws-eu01"
 ALFACOINS_NOTIFICATION_URL = "ipn-payment"
 ALFACOINS_TIMEOUT = "840"
+
+ALFACOINS_ACCEPTED_COINS = (
+    ("bitcoincash", 'Bitcoin Cash'),
+    ("litecoin", 'Litecoin'),
+    ("bitcoin", 'Bitcoin'),
+    ("dash", 'Dash'),
+    ("ethereum", 'Ethereum')
+)
+
+
+STATICFILES_FINDERS = (
+    'django.contrib.staticfiles.finders.FileSystemFinder',
+    'django.contrib.staticfiles.finders.AppDirectoriesFinder',
+    # other finders..
+    'compressor.finders.CompressorFinder',
+)
+
+COMPRESS_ENABLED = True
+
+COMPRESS_REBUILD_TIMEOUT = 2592000  # (30 days in seconds)
+COMPRESS_OFFLINE = False
+
+COMPRESS_OFFLINE_TIMEOUT = 31536000  # (1 year in seconds)
+COMPRESS_OUTPUT_DIR = 'dev'
+
+COMPRESS_PRECOMPILERS = (
+    ('text/coffeescript', 'coffee --compile --stdio'),
+    ('text/less', 'lessc {infile} {outfile}'),
+    ('text/x-sass', 'sass {infile} {outfile}'),
+    ('text/x-scss', 'compressor.filters.parceljs.ParserFilterCSS'),
+    ('text/stylus', 'stylus < {infile} > {outfile}'),
+)
+
+COMPRESS_PRIVATE_DIRS = [
+    os.path.join(BASE_DIR, 'frontend')
+]

@@ -30,6 +30,6 @@ urlpatterns += [
 urlpatterns += [
     path('withdrawals', WithdrawList.as_view(), name="withdraw_list"),
     path('withdrawals/new', WithdrawSetupView.as_view(), name="withdraw_setup"),
-    path('withdrawals/<int:pk>', WithdrawDetail.as_view(), name='withdraw_detail'),
+    path('withdrawals/<uuid:pk>', WithdrawDetail.as_view(), name='withdraw_detail'),
     path('withdrawals/<str:tx_id>/status', get_bit_send_status, name='bit_send_status')
 ]

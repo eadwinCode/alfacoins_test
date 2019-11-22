@@ -159,7 +159,8 @@ class Withdrawal(TimeStampedModel):
         (WITHDRAW_STATUS_PENDING, _('Pending')),
         (WITHDRAW_STATUS_NEW, _('new')),
     )
-    # id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     address = models.CharField(max_length=150, verbose_name=_('Coin Address'))
     legacy_address = models.CharField(null=True, blank=True, max_length=150, verbose_name=_('Legacy Address'))
     destination_tag = models.CharField(null=True, blank=True, max_length=150, verbose_name=_('Destination Tag'))
@@ -195,7 +196,7 @@ class Withdrawal(TimeStampedModel):
         alfacoins = AlfaCoinsProvider.coinsprovider()
         if self.coin_amount and self.amount:
             raise Exception('coin_amount and amount can not be used at the same time')
-        amount = self.coin_amount or self.amount
+
         options = dict(address=self.address)
         if self.destination_tag:
             options.update(destination_tag=self.destination_tag)
@@ -214,18 +215,16 @@ class Withdrawal(TimeStampedModel):
         return c
 
     def get_wx_status(self):
-        if self.provider_tx and not (self.status in [Withdrawal.WITHDRAW_STATUS_COMPLETED, Withdrawal.WITHDRAW_STATUS_NEW]):
+        if self.provider_tx and self.status != Withdrawal.WITHDRAW_STATUS_COMPLETED:
             alfacoins = AlfaCoinsProvider.coinsprovider()
             res = alfacoins.bitsend_status(bitsend_id=int(self.provider_tx.id))
-
-            if self.status != Payment.PAYMENT_STATUS_COMPLETED:
-                self.status = self.status_dict().get(res['status'])
-                self.provider_tx.tx_id = res.get('txid', None)
-                self.provider_tx.coin_amount = float(res.get('coin_amount', 0))
-                self.provider_tx.network_fee = float(res.get('network_fee', 0))
-                self.provider_tx.commission = float(res.get('commission', 0))
-                self.save()
-
+            self.status = self.status_dict().get(res['status'])
+            self.provider_tx.tx_id = res.get('txid', None)
+            self.provider_tx.coin_amount = float(res.get('coin_amount', 0))
+            self.provider_tx.network_fee = float(res.get('network_fee', 0))
+            self.provider_tx.commission = float(res.get('commission', 0))
+            self.save()
             return dict(status=res['status'], type=res['type'], coin_amount=float(res['coin_amount']))
+
         return dict(status=self.get_status_display(), type=self.currency_type,
                     coin_amount=self.provider_tx.coin_amount)
